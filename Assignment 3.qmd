@@ -1,0 +1,125 @@
+---
+title: "Interactive ML assign3"
+format: pdf
+editor: visual
+---
+
+# Assignment 3
+
+
+## Question 1
+
+I expect all pairs to have the same regret. That is because the difference between q1 and q2 is 0.1 for all pairs. Therefore the expected regret is the same across all of them. 
+
+## Question 2
+
+Implemention of epsilon greedy
+
+```{r}
+Epsilon_greedy = function(t = 10000, pair){
+  delta = max(pair) - min(pair)
+  nt1 = 0 
+  nt2 = 0
+  losses = data.frame(x1 = rep(NA, t ),
+                      x2 = rep(NA,t ) )
+  RT = 0
+  for(i in 1:ceiling(t*delta)){
+    
+    curr = which.min(c(nt1,nt2))
+    
+    if(curr == 1){
+      
+      action = 1
+      nt1 = nt1+1
+      
+    }
+    
+    else{
+      action = 2
+      nt2 = nt2 +1 
+      
+    }
+    loss_X1 = rbinom(1,1,pair[1])
+    loss_X2 = rbinom(1,1,pair[2])
+    losses[i, ] = c(x1 = ifelse(action == 1, 
+                                loss_X1,
+                                NA),
+                    x2 = ifelse(action == 2, 
+                                loss_X2,
+                                NA) ) 
+  if(action == 1){
+    RT = RT+ ifelse(pair[1] < pair[2], 0,loss_X1 -loss_X2)
+    }
+  else{ 
+    RT = RT + ifelse(pair[1] > pair [2], 0, loss_X2 - loss_X1)
+  }
+
+  }
+  
+  best_action = ifelse(sum(losses$x1, na.rm = T) < sum(losses$x2, na.rm = T), 1, 2)
+  
+  
+  for(t in (ceiling(t*delta)+1):t){
+    
+    loss_X1 = rbinom(1,1,pair[1])
+    loss_X2 = rbinom(1,1,pair[2])
+    
+    losses[t, ] = c(x1 = ifelse(best_action == 1, 
+                                loss_X1,
+                                NA),
+                    x2 = ifelse(best_action == 2, 
+                                loss_X2,
+                                NA) )
+    if(best_action == 1){
+      
+    RT = RT+ ifelse(pair[1] < pair[2], 0,loss_X1 -loss_X2)
+    
+    }
+
+    else{ 
+      
+    RT = RT + ifelse(pair[1] > pair[2], 0, loss_X2 - loss_X1)
+    
+    }
+    
+  }
+  return(RT)
+}
+```
+
+
+```{r}
+set.seed(4382706)
+pairs = matrix(c(0.1,0,0.2,0.1,0.5,0.4,
+                 0.4,0.5,0.7,0.8,0.9,1), nrow = 6,  
+                                        byrow = T)
+regrets = matrix(NA, nrow = 20, ncol = 6 ) 
+colnames(regrets) = paste("pair", 1:6)
+for(i in 1:6){
+  
+  regrets[,i] = replicate(20,{
+    
+    Epsilon_greedy(pair = pairs[i,])
+    
+  })
+}
+
+mean_regrets = apply(regrets, 2 , mean)
+mean_regrets
+```
+## Question 3
+
+In such a scenario we could imagine an algorithm in which the first 10 rounds are exploration, at which point we decide which pair we are dealign with (based on the average observed loss which should be significantly higher for the first pair compared to the second pair). After those 10 rounds we need to find which action corresponds to which q. For this we just need to see whether for any action the losses have swtiched, because at we know that for q1 or q2 this will not be the case. Then we just stick with the action for with that we evaluate against which will give us the lowest average regret at that point. 
+
+
+## Question 4
+
+I observe pretty much what I expected based on Q1. There are no real differences between the pairs in terms of regret so S
+
+
+
+
+
+
+
+
