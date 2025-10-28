@@ -169,10 +169,10 @@ delta = 1/(t^2)
   }
     n_i[1] = 1
     n_i[2] = 1
-  for(t in length(pairs)+1:t){
+  for(t in (length(pairs)+1):t){
     
     for(l in 1:length(actions)){
-      ut_i[l] = 1/n_i[l] * sum(losses[l,], 
+      ut_i[l] = 1/n_i[l] * sum(losses[,l], 
                                na.rm =  T)
       
       utd_i[l] = ut_i[l] - 
@@ -227,7 +227,7 @@ mean_regrets = apply(regrets, 2 , mean)
 mean_regrets
 ```
 
-Again we see very similar regret across all pair which makes sense. However overall average regrets are way higher than what we have seen before. I assume that is because of the small difference in expected losses, we have a fair amount of fluctuation in the best action as given by the lower confidence bound in the first few iterations of the algorithm. This exploration is costly which is why epsilon greedy outperforms the LCB in this case. 
+Again we see very similar regret across all pair which makes sense. However overall average regrets are  higher than what we have seen before. I assume that is because of the small difference in expected losses, we have a fair amount of fluctuation in the best action as given by the lower confidence bound in the first few iterations of the algorithm. This exploration is costly which is why epsilon greedy outperforms the LCB in this case. 
 
 
 ```{r}
@@ -274,18 +274,18 @@ delta = 1/(t^2)
     n_i[1] = 1
     n_i[2] = 1
     
-    for(t in length(pairs)+1:t){
+    for(t in (length(pairs)+1):t){
     
     for(l in 1:length(actions)){
-      ut_i[l] = 1/n_i[l] * sum(losses[l,], 
+      ut_i[l] = 1/n_i[l] * sum(losses[,l], 
                                na.rm =  T)
       
-      sig_i[l] = 1/n_i[l] * (sum(losses[l,], 
+      sig_i[l] = 1/n_i[l] * (sum(losses[,l], 
                                na.rm =  T) - ut_i[l])^2
       
       utd_i[l] = ut_i[l] - 
-        sqrt( 2*sig_i[l]*log( 1/delta )/n_i[l] ) - 
-        3*log( 1/delta )/n_i[l]
+        sqrt( (2*sig_i[l]*log( 1/delta ))/n_i[l] ) - 
+        (3*log( 1/delta )/ n_i[l])
     }
     action = actions[ which.min( utd_i ) ]
     
@@ -335,6 +335,97 @@ mean_regrets
 ```
 
 ```{r}
+LCB_pred_l = function(t = 10000, losses){
+  actions = c( 1, 2 )
+pair_exp = apply(losses,2,mean)
+
+RT = 0
+
+n_i = matrix(NA, nrow = 1, ncol = 2)
+
+ut_i = matrix(NA, nrow = 1, ncol = 2)
+
+utd_i = matrix(NA, nrow = 1, ncol = 2)
+
+delta = 1/(t^2)
+
+  for(i in 1:2){
+    
+    action = actions[i]
+    loss_X1 = losses[i,1]
+    loss_X2 = losses[i,2]
+    
+    if(action == 1){
+      
+    RT = RT+ ifelse(pair_exp[1] < pair_exp[2], 0,loss_X1 -
+                      loss_X2)
+    }
+    else{ 
+      
+    RT = RT + ifelse(pair_exp[1] > pair_exp[2], 0, loss_X2 -
+                       loss_X1)
+    }
+  }
+
+  n_i[1] = 1
+  n_i[2] = 1
+  
+  for(t in (length(pair_exp)+1):t){
+    
+    for(l in 1:length(actions)){
+      ut_i[l] = 1/n_i[l] * sum(losses[1:t,l], 
+                               na.rm =  T)
+      
+      utd_i[l] = ut_i[l] - 
+        sqrt( 2*log( 1/delta )/n_i[l] )
+    }
+    action = actions[ which.min( utd_i ) ]
+    
+    loss_X1 = losses[t,1]
+    loss_X2 = losses[t,2]
+    
+    
+    
+    if(action == 1){
+      
+    RT = RT+ ifelse(pair_exp[1] < pair_exp[2], 0,loss_X1 -
+                      loss_X2)
+    }
+    else{ 
+    
+    RT = RT + ifelse(pair_exp[1] > pair_exp[2], 0, loss_X2 -
+                       loss_X1)
+    }
+    n_i[action] = n_i[action] + 1 
+    
+  }
+  
+  return(RT)
+}
+  
+```
+
+```{r}
+
+loss_gen = function(){
+  
+losses = matrix(NA, nrow = 10000, ncol = 2)
+
+for(l in 1:1000){ 
+  losses[l, 1] = rbinom(1,1, 0.1)
+  losses[l, 2] = rbinom(1,1,0.4)
+}
+for(p in 101:10000){
+  losses[p,1] = rbinom(1,1,1)
+  losses[p,2] = rbinom(1,1,0)
+}
+return(losses)
+}
+
+losses = loss_gen()
+
+LCB_pred_l(losses = losses)
+
 
 ```
 
