@@ -14,20 +14,25 @@ I expect all pairs to have the same regret. That is because the difference betwe
 
 ### Question 2
 
-Implemention of epsilon greedy
+Implementation of epsilon greedy
 
 ```{r}
 Epsilon_greedy = function(t = 10000, pair){
-  delta = max(pair) - min(pair)
-  nt1 = 0 
-  nt2 = 0
+  ## Initializing the relevant variables
+  delta = max(pair) - min(pair) #delta, the difference in expected losses
+  epsilon = (8*log(t*(delta^2)/4)) / t*delta^2 ##Epsilon as described in the assignment 
+  nt1 = 0 #Counter of action 1
+  nt2 = 0 # Counter of action 2
   losses = data.frame(x1 = rep(NA, t ),
-                      x2 = rep(NA,t ) )
-  RT = 0
-  for(i in 1:ceiling(t*delta)){
+                      x2 = rep(NA,t ) ) #Observed losses of action 1 and 2
+  RT = 0 #Regret
+  
+  #Loop for the first t*epsilon iterations  
+  for(i in 1:ceiling(t*epsilon)){
     
-    curr = which.min(c(nt1,nt2))
+    curr = which.min(c(nt1,nt2)) #Checking which action has been chosen the least
     
+    ##choosing action based on which one has been chosen the least
     if(curr == 1){
       
       action = 1
@@ -40,6 +45,8 @@ Epsilon_greedy = function(t = 10000, pair){
       nt2 = nt2 +1 
       
     }
+    #Generating losses and appending the observed losses to a df. If we did not observe a loss for 
+    #An action then we append NA
     loss_X1 = rbinom(1,1,pair[1])
     loss_X2 = rbinom(1,1,pair[2])
     losses[i, ] = c(x1 = ifelse(action == 1, 
@@ -49,18 +56,18 @@ Epsilon_greedy = function(t = 10000, pair){
                                 loss_X2,
                                 NA) ) 
   if(action == 1){
-    RT = RT+ ifelse(pair[1] < pair[2], 0,loss_X1 -loss_X2)
+    RT = RT+ ifelse(pair[1] < pair[2], 0,loss_X1 -loss_X2) #Updating regret as described in the Assignment                                                             description
     }
   else{ 
     RT = RT + ifelse(pair[1] > pair [2], 0, loss_X2 - loss_X1)
   }
 
   }
+  #Choosing the best action after t*epsilon iterations
+  best_action = ifelse(sum(losses$x1, na.rm = T) < sum(losses$x2, na.rm = T), 1, 2) 
   
-  best_action = ifelse(sum(losses$x1, na.rm = T) < sum(losses$x2, na.rm = T), 1, 2)
-  
-  
-  for(t in (ceiling(t*delta)+1):t){
+  #repeating the same procedure as before but with the best action instead of alternating actions
+  for(t in (ceiling(t*epsilon)+1):t){
     
     loss_X1 = rbinom(1,1,pair[1])
     loss_X2 = rbinom(1,1,pair[2])
@@ -96,6 +103,7 @@ pairs = matrix(c(0.1,0,0.2,0.1,0.5,0.4,
                                         byrow = T)
 regrets = matrix(NA, nrow = 20, ncol = 6 ) 
 colnames(regrets) = paste("pair", 1:6)
+pairs
 for(i in 1:6){
   
   regrets[,i] = replicate(20,{
@@ -110,12 +118,12 @@ mean_regrets
 ```
 ### Question 3
 
-In such a scenario we could imagine an algorithm in which the first 10 (could be more or less of course) rounds are exploration, at which point we decide which pair we are dealign with (based on the average observed loss which should be significantly higher for the first pair compared to the second pair). After those 10 rounds we need to find which action corresponds to which q. For this we just need to see whether for any action the losses have switched, because at we know that for either q1 or q2 this will not be the case. Then we just stick with the action for with that we evaluate against which will give us the lowest average regret at that point. If we have not seen a switch in losses then we just continue exploring until we do, at which point we know which action to choose. 
+In such a scenario we could imagine an algorithm in which the first 10 (could be more or less of course) rounds are exploration, at which point we decide which pair we are dealing with (based on the average observed loss which should be significantly higher for the first pair compared to the second pair). After those 10 rounds we need to find which action corresponds to which q. For this we just need to see whether for any action the losses have switched (i.e we have observed two different losses for an action), because at we know that for either q1 or q2 this will not be the case. Then we just stick with the action for witch that we evaluate against which will give us the lowest average regret at that point. If we have not seen a switch in losses then we just continue exploring until we do, at which point we know which action to choose. 
 
 
 ### Question 4
 
-I observe pretty much what I expected based on Q1. There are no real differences between the pairs in terms of regret, since the difference between them is the same. 
+I observe a pattern that is quite surprising initially. We can see that for the first three pairs we have a regret of almost 0, while for the last three pairs we have a regret of almost 1000. After further inspecting the algorithm I observed the following: the ceiling of epsilon*T is always 3. This means that we have an uneven amount of observations between the iterations (as in we choose action 1 twice and action 2 once). This then means that my ifelse condition is very unlikely to be met, since the first sum will most likely always be larger than the second one (and even if it is equal the ifelse will choose action 2), so subsequently we pretty much always choose action 2. For the first three pairs this is good, since that is the action with the lower loss, leading to almost zero regret. However subsequently for the next three pairs action 2 turns out to be the wrong action which means we have an expected regret 1000 (so t times delta). 
 
 
 ### Question 5 
@@ -129,33 +137,34 @@ We do not have q1 and q2, and so we do not know delta.
 
 ```{r}
 LCB_alg = function(t=10000, pair){
-  
-actions = c( 1, 2 )
+#Initializing relevant variables
+actions = c( 1, 2 ) #initialize possible actions 
 
 losses = data.frame(x1 = rep(NA, t ),
-                      x2 = rep(NA,t ) )
-RT = 0
+                      x2 = rep(NA,t ) ) #Initialize a df for the losses 
+RT = 0 #Regret
 
-n_i = matrix(NA, nrow = 1, ncol = 2)
+n_i = matrix(NA, nrow = 1, ncol = 2) #tracking how often we have observed a certain action
 
-ut_i = matrix(NA, nrow = 1, ncol = 2)
+ut_i = matrix(NA, nrow = 1, ncol = 2) #tracking the means of the observed losses
 
-utd_i = matrix(NA, nrow = 1, ncol = 2)
+utd_i = matrix(NA, nrow = 1, ncol = 2) #lower confidence bounds for each action
 
 delta = 1/(t^2)
-
+#Loop to observe each possible action once (in this case length 2)
   for(i in 1:length(actions)){
-    action = actions[i]
-    loss_X1 = rbinom(1,1,pair[1])
+    action = actions[i] #Choose action i 
+    loss_X1 = rbinom(1,1,pair[1]) #Generate losses for each action
     loss_X2 = rbinom(1,1,pair[2])
     
+    #Append observed losses as before
     losses[i, ] = c(x1 = ifelse(action == 1, 
                                 loss_X1,
                                 NA),
                     x2 = ifelse(action == 2, 
                                 loss_X2,
                                 NA) )
-    
+    #Compute regret based on chosen action and action with lower expected loss
     if(action == 1){
       
     RT = RT+ ifelse(pair[1] < pair[2], 0,loss_X1 -
@@ -169,26 +178,29 @@ delta = 1/(t^2)
   }
     n_i[1] = 1
     n_i[2] = 1
+  #Initialize loop for the rest of the algorithm
   for(t in (length(pairs)+1):t){
-    
+    #Each time compute the values for ut_i and utd_i
     for(l in 1:length(actions)){
       ut_i[l] = 1/n_i[l] * sum(losses[,l], 
-                               na.rm =  T)
+                               na.rm =  T) #Calculate the observed mean losses for each action
       
       utd_i[l] = ut_i[l] - 
-        sqrt( 2*log( 1/delta )/n_i[l] )
+        sqrt( 2*log( 1/delta )/n_i[l] ) #Create a confidence interval for each action
     }
-    action = actions[ which.min( utd_i ) ]
+    action = actions[ which.min( utd_i ) ] #Choose action for which we have a lower lower bound
     
-    loss_X1 = rbinom(1,1,pair[1])
+    loss_X1 = rbinom(1,1,pair[1]) #generate losses for each action
     loss_X2 = rbinom(1,1,pair[2])
     
+    #Append losses based on which action was chosen as before
     losses[t, ] = c(x1 = ifelse(action == 1, 
                                 loss_X1,
                                 NA),
                     x2 = ifelse(action == 2, 
                                 loss_X2,
-                                NA) )
+                                NA) ) 
+    #Calculate regret based on action 
     if(action == 1){
       
     RT = RT+ ifelse(pair[1] < pair[2], 0,loss_X1 -
@@ -199,7 +211,7 @@ delta = 1/(t^2)
     RT = RT + ifelse(pair[1] > pair [2], 0, loss_X2 -
                        loss_X1)
     }
-    n_i[action] = n_i[action] + 1 
+    n_i[action] = n_i[action] + 1 #Update how often we have chosen a certain action 
   }
     return(RT)
   }
@@ -226,13 +238,17 @@ for(i in 1:6){
 mean_regrets = apply(regrets, 2 , mean)
 mean_regrets
 ```
+### Question 7
+What we see now is that the regret across pairs is quite equal. This makes sense because we have the same difference in expected loss across all actions and we iterate between them often enough to get a good estimate of the losses for each action
 
-Again we see very similar regret across all pair which makes sense. However overall average regrets are  higher than what we have seen before. I assume that is because of the small difference in expected losses, we have a fair amount of fluctuation in the best action as given by the lower confidence bound in the first few iterations of the algorithm. This exploration is costly which is why epsilon greedy outperforms the LCB in this case. 
 
 
+#Question 8 
 ```{r}
 LCB2 = function(t = 10000, pair){
-  actions = c( 1, 2 )
+#The whole algorithm barely changes so I assume it is okay to only annotate what has changed
+#Initialize the relevant variables, mostly same as before
+actions = c( 1, 2 )
 
 losses = data.frame(x1 = rep(NA, t ),
                       x2 = rep(NA,t ) )
@@ -244,10 +260,10 @@ ut_i = matrix(NA, nrow = 1, ncol = 2)
 
 utd_i = matrix(NA, nrow = 1, ncol = 2)
 
-sig_i = matrix(NA, nrow = 1, ncol = 2)
+sig_i = matrix(NA, nrow = 1, ncol = 2) # New variable to compute the new confidence intervals
 
 delta = 1/(t^2)
-
+#Again observe each action once
   for(i in 1:length(actions)){
     action = actions[i]
     loss_X1 = rbinom(1,1,pair[1])
@@ -273,16 +289,16 @@ delta = 1/(t^2)
   }
     n_i[1] = 1
     n_i[2] = 1
-    
+    #From this point on choose based on the adjusted lower confidence bound 
     for(t in (length(pairs)+1):t){
     
     for(l in 1:length(actions)){
       ut_i[l] = 1/n_i[l] * sum(losses[,l], 
-                               na.rm =  T)
-      
-      sig_i[l] = 1/n_i[l] * (sum(losses[,l], 
-                               na.rm =  T) - ut_i[l])^2
-      
+                               na.rm =  T) 
+      #Calculate the sigma based on the mean variance observed so far 
+      sig_i[l] = 1/n_i[l] * (sum((losses[,l] 
+                               - ut_i[l])^2, na.rm =  T))
+      #Calculate the adjusted lower confidence bounds 
       utd_i[l] = ut_i[l] - 
         sqrt( (2*sig_i[l]*log( 1/delta ))/n_i[l] ) - 
         (3*log( 1/delta )/ n_i[l])
@@ -329,11 +345,15 @@ for(i in 1:6){
     
   })
 }
-
 mean_regrets = apply(regrets, 2 , mean)
 mean_regrets
 ```
+### Question 9 
+We see a similar pattern as with the first iteration of the LCB algorithm. This makes sense since this version just increases the confidence intervals to reduce switching between the actions too much since we have a low difference between the losses. The only difference is that the last pair the expected losses are high compared to low expected losses in the first pair. At this point I do not have an explanation for this.
 
+### Question 10 
+
+To assess the regret I rewrote the previous function to work with implemented losses
 ```{r}
 LCB_pred_l = function(t = 10000, losses){
   actions = c( 1, 2 )
@@ -349,12 +369,22 @@ utd_i = matrix(NA, nrow = 1, ncol = 2)
 
 delta = 1/(t^2)
 
+losses_obs = data.frame(x1 = rep(NA, t ),
+                      x2 = rep(NA,t ) )
+
+
   for(i in 1:2){
     
     action = actions[i]
     loss_X1 = losses[i,1]
     loss_X2 = losses[i,2]
     
+    losses_obs[i, ] = c(x1 = ifelse(action == 1, 
+                                loss_X1,
+                                NA),
+                    x2 = ifelse(action == 2, 
+                                loss_X2,
+                                NA) )
     if(action == 1){
       
     RT = RT+ ifelse(pair_exp[1] < pair_exp[2], 0,loss_X1 -
@@ -365,6 +395,7 @@ delta = 1/(t^2)
     RT = RT + ifelse(pair_exp[1] > pair_exp[2], 0, loss_X2 -
                        loss_X1)
     }
+    
   }
 
   n_i[1] = 1
@@ -373,17 +404,24 @@ delta = 1/(t^2)
   for(t in (length(pair_exp)+1):t){
     
     for(l in 1:length(actions)){
-      ut_i[l] = 1/n_i[l] * sum(losses[1:t,l], 
+      ut_i[l] = 1/n_i[l] * sum(losses_obs[,l], 
                                na.rm =  T)
       
       utd_i[l] = ut_i[l] - 
         sqrt( 2*log( 1/delta )/n_i[l] )
     }
+    
     action = actions[ which.min( utd_i ) ]
     
     loss_X1 = losses[t,1]
     loss_X2 = losses[t,2]
     
+    losses_obs[t, ] = c(x1 = ifelse(action == 1, 
+                                loss_X1,
+                                NA),
+                    x2 = ifelse(action == 2, 
+                                loss_X2,
+                                NA) )
     
     
     if(action == 1){
@@ -404,26 +442,25 @@ delta = 1/(t^2)
 }
   
 ```
-
+### Question 10 
+I generate the losses using the following logic: We generate the losses such that 
 ```{r}
+set.seed(4382706)
 
 loss_gen = function(){
-  
 losses = matrix(NA, nrow = 10000, ncol = 2)
-
-for(l in 1:1000){ 
-  losses[l, 1] = rbinom(1,1, 0.1)
-  losses[l, 2] = rbinom(1,1,0.4)
+for(i in 1:3000){
+  losses[i, 1] = 0.2
+  losses[i, 2] = 0
 }
-for(p in 101:10000){
-  losses[p,1] = rbinom(1,1,1)
-  losses[p,2] = rbinom(1,1,0)
+for(t in 3001:10000){
+  losses[t, 1] = 0.6
+  losses[t, 2] = 1
 }
 return(losses)
 }
-
 losses = loss_gen()
-
+apply(losses,2,mean)
 LCB_pred_l(losses = losses)
 
 
